@@ -2,6 +2,7 @@ package gophercises_cyoa
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -77,7 +78,7 @@ var defaultHandlerTemplate = `
 </body>
 </html>`
 
-type HandlerOption func(h *handler)
+type HandlerOption func(*handler)
 
 // https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
 func WithTemplate(t *template.Template) HandlerOption {
@@ -86,9 +87,15 @@ func WithTemplate(t *template.Template) HandlerOption {
 	}
 }
 
+func WithPathFunc(fn func(r *http.Request) string) HandlerOption {
+	return func(h *handler) {
+		h.pathFn = fn
+	}
+}
+
 // interface return here for the purpose of explicitly defining the purpose of this function
 func NewHandler(s Story, opts ...HandlerOption) http.Handler {
-	h := handler{s, tpl}
+	h := handler{s, tpl, defaultPathFn}
 	for _, opt := range opts {
 		opt(&h)
 	}
@@ -96,16 +103,13 @@ func NewHandler(s Story, opts ...HandlerOption) http.Handler {
 }
 
 type handler struct {
-	s Story
-	t *template.Template
+	s      Story
+	t      *template.Template
+	pathFn func(*http.Request) string
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimSpace(r.URL.Path)
-	if path == "" || path =="/" {
-		path = "/intro"
-	}
-	path = path[1:]
+	path := h.pathFn(r)
 	if chapter, ok := h.s[path]; ok {
 		err := h.t.Execute(w, chapter)
 		if err != nil {
@@ -114,7 +118,15 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	http.Error(w, "Chapter not found.", http.StatusNotFound)
+	http.Error(w, fmt.Sprintf("Chapter '%s' not found.", path), http.StatusNotFound)
+}
+
+func defaultPathFn(r *http.Request) string {
+	path := strings.TrimSpace(r.URL.Path)
+	if path == "" || path == "/" {
+		path = "/intro"
+	}
+	return path[1:]
 }
 
 func JsonStory(r io.Reader) (Story, error)  {
