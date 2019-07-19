@@ -77,12 +77,16 @@ var defaultHandlerTemplate = `
 </body>
 </html>`
 
-func NewHandler(s Story) http.Handler { // interface return here for the purpose of explicitly defining the purpose of this function
-	return handler{s}
+func NewHandler(s Story, t *template.Template) http.Handler { // interface return here for the purpose of explicitly defining the purpose of this function
+	if t == nil {
+		t = tpl
+	}
+	return handler{s, t}
 }
 
 type handler struct {
 	s Story
+	t *template.Template
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
